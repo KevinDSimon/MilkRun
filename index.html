@@ -1,0 +1,615 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Milk Run</title>
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Milk Run">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="theme-color" content="#f3f6f9" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0d1520" media="(prefers-color-scheme: dark)">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="icon" type="image/svg+xml" href="icon.svg">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Familjen+Grotesk:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+/* Layout: three screens in one narrow column (pick a length → timer with recipe steps → log), plus an info sheet. */
+:root{
+  --bg:#f3f6f9; --surface:#ffffff; --line:#dbe2ea; --fg:#18222e; --muted:#5f6c7b;
+  --massage:#c4577a; --massage-soft:#f6e3ea;
+  --express:#2f6fae; --express-soft:#dfeaf6;
+  --hands:#8a6d3b; --hands-soft:#f1e9da;
+  --lcd:#dfe5dc; --lcd-ink:#26332c; --lcd-dim:#7d8b81;
+  --warn:#a2581b;
+  --display:"Familjen Grotesk","Helvetica Neue",Arial,sans-serif;
+  --body:"IBM Plex Sans",system-ui,-apple-system,sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+  color-scheme:light;
+}
+@media (prefers-color-scheme: dark){:root{
+  --bg:#0d1520; --surface:#152130; --line:#243346; --fg:#e4eaf1; --muted:#8e9db0;
+  --massage:#e58aa8; --massage-soft:#3a2230; --express:#7fb2e5; --express-soft:#1b2d42;
+  --hands:#d6b47a; --hands-soft:#33291b;
+  --lcd:#1a2621; --lcd-ink:#cfe3d4; --lcd-dim:#6f8577; --warn:#e3a26a; color-scheme:dark }}
+
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{margin:0}
+html{font-size:16px;touch-action:manipulation}
+/* iOS Larger Text: -apple-system-body is 17px at the default setting, so body text below uses .88rem (about 15px) */
+@supports (font: -apple-system-body){ html{font:-apple-system-body;font-family:var(--body)} }
+body{background:var(--bg);color:var(--fg);font-family:var(--body);font-size:.88rem;line-height:1.5;-webkit-text-size-adjust:100%;overscroll-behavior-y:none;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));
+  padding-top:max(14px,env(safe-area-inset-top,0px));padding-bottom:max(32px,env(safe-area-inset-bottom,0px))}
+.wrap{max-width:520px;margin:0 auto;display:flex;flex-direction:column;gap:22px}
+h1,h2,h3{font-family:var(--display);margin:0;text-wrap:balance}
+.eyebrow{font-size:.72rem;letter-spacing:.09em;text-transform:uppercase;color:var(--muted);font-weight:600}
+.num{font-family:var(--mono);font-variant-numeric:tabular-nums}
+button{font:inherit;font-weight:600;border-radius:12px;border:1px solid var(--line);background:var(--surface);color:var(--fg);padding:11px 16px;cursor:pointer;min-height:44px;-webkit-tap-highlight-color:transparent;touch-action:manipulation;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+button:not(:disabled):active{transform:scale(.97)}
+input,select,textarea,a{touch-action:manipulation}
+button:focus-visible,select:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px solid var(--express);outline-offset:2px}
+button:disabled{opacity:.45;cursor:default}
+
+/* Shared screen header: a 44px bar (left: wordmark or back, right: icons), then eyebrow / title / subline */
+.bar{display:flex;align-items:center;justify-content:space-between;gap:12px;height:44px}
+.bar .acts{display:flex;align-items:center;margin-right:-11px}
+.wordmark{font-family:var(--display);font-weight:700;font-size:1rem;letter-spacing:-.005em;display:flex;align-items:center;gap:8px}
+.iconbtn{width:44px;height:44px;padding:0;border-radius:50%;display:grid;place-items:center;flex:none;border:none;background:transparent;color:var(--fg)}
+.iconbtn:active{background:var(--line)}
+.back{display:flex;align-items:center;gap:2px;padding:0 10px 0 0;margin-left:-5px;background:transparent;border:none;color:var(--fg);font-weight:500;min-height:44px}
+.back:disabled{opacity:.35}
+.head{display:flex;flex-direction:column;gap:4px}
+.head h1{font-size:1.75rem;font-weight:700;letter-spacing:-.015em;line-height:1.15}
+.sub{color:var(--muted);font-size:.92rem;margin:0}
+.link{background:none;border:none;padding:0;min-height:0;color:var(--express);font-weight:600;font-size:.88rem;text-decoration:underline;text-underline-offset:3px;text-decoration-thickness:1px}
+h2.sect{font-size:1.05rem;font-weight:600}
+
+/* Start screen */
+.lengths{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.len{display:flex;flex-direction:column;align-items:flex-start;gap:8px;padding:16px;border-radius:18px;text-align:left;font-weight:400;min-height:132px}
+.len .m{font-family:var(--display);font-weight:700;font-size:min(2.3rem,11vw);line-height:1;letter-spacing:-.02em}
+.len .m small{font-size:1rem;font-weight:600;margin-left:3px;color:var(--muted)}
+.len .seg{display:flex;gap:2px;width:100%;height:6px;margin-top:auto}
+.len .seg i{border-radius:2px;display:block}
+.nw{white-space:nowrap}
+.len .sub{font-size:.8rem;color:var(--muted)}
+.toggles{display:flex;flex-direction:column;border-top:1px solid var(--line)}
+.tog{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 2px;border-bottom:1px solid var(--line);font-size:.95rem}
+.tog small{display:block;color:var(--muted);font-size:.8rem}
+.switch{appearance:none;-webkit-appearance:none;width:50px;height:30px;border-radius:15px;background:var(--line);position:relative;flex:none;cursor:pointer;margin:0;border:none;padding:0;transition:background .2s}
+.switch::after{content:"";position:absolute;top:3px;left:3px;width:24px;height:24px;border-radius:50%;background:var(--surface);box-shadow:0 1px 2px rgba(0,0,0,.25);transition:transform .2s}
+.switch:checked{background:var(--hands)}
+.switch:checked::after{transform:translateX(20px)}
+
+/* Session screen */
+.session{--mode:var(--massage);--mode-soft:var(--massage-soft);display:flex;flex-direction:column;gap:18px}
+.session.express{--mode:var(--express);--mode-soft:var(--express-soft)}
+.session.hands{--mode:var(--hands);--mode-soft:var(--hands-soft)}
+.lcd{background:var(--lcd);color:var(--lcd-ink);border-radius:18px;padding:14px 16px 12px;display:grid;grid-template-columns:auto 1fr auto;align-items:end;gap:4px 10px;font-family:var(--mono);box-shadow:inset 0 2px 6px rgba(0,0,0,.08)}
+.lcd .cell{display:flex;flex-direction:column;align-items:center;gap:0}
+.lcd .v{font-size:min(2.3rem,9.5vw);font-weight:500;line-height:1;font-variant-numeric:tabular-nums}
+.lcd .k{font-size:.62rem;letter-spacing:.12em;color:var(--lcd-dim);margin-top:4px}
+.lcd .clock{font-size:min(3.2rem,14vw);font-weight:500;line-height:1;letter-spacing:-.03em;font-variant-numeric:tabular-nums}
+.lcd .mid{display:flex;flex-direction:column;align-items:center}
+.lcd .wave{width:100%;max-width:150px;height:22px;display:block}
+.lcd .wave path{stroke:var(--lcd-ink);fill:none;stroke-width:2;stroke-linecap:round}
+.modeline{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.mode-name{font-family:var(--display);font-weight:700;font-size:1.25rem;color:var(--mode);display:flex;align-items:center;gap:8px}
+.awake{font-size:.8rem;color:var(--muted);white-space:nowrap;display:flex;align-items:center;gap:6px}
+.awake i{width:7px;height:7px;border-radius:50%;background:currentColor;display:block}
+.awake.ok{color:var(--muted)} .awake.bad{color:var(--warn)}
+.tip{margin:0;font-size:1rem;min-height:3em}
+.controls{display:grid;grid-template-columns:1fr 1.5fr 1fr;gap:8px;align-items:stretch}
+.controls button{min-height:54px;padding-inline:6px;white-space:nowrap;font-size:min(1rem,4.2vw)}
+.controls .primary{font-size:min(1.08rem,4.6vw)}
+.primary{background:var(--mode);border-color:var(--mode);color:var(--surface);font-size:1.08rem}
+.ghost{background:transparent}
+.endbtn{grid-column:1/-1;min-height:44px !important;color:var(--muted);border-color:transparent}
+.endbtn.confirm{color:var(--warn);border-color:var(--warn)}
+
+.steps{list-style:none;margin:0;padding:0;border-top:1px solid var(--line)}
+.steps li{position:relative;display:grid;grid-template-columns:2.4rem 1fr 3.4rem 4.6rem;align-items:center;gap:10px;padding:11px 8px;border-bottom:1px solid var(--line);font-size:.92rem;overflow:hidden}
+.steps li.head{font-size:.68rem;letter-spacing:.09em;text-transform:uppercase;color:var(--muted);font-weight:600;padding-block:8px}
+.steps li > *{position:relative;min-width:0}
+.steps .fill{position:absolute;inset:0;width:var(--p,0%);background:var(--row-soft);transition:width .3s linear}
+.steps li.cur{font-weight:600}
+.steps li.done{opacity:.4}
+.steps .mn{color:var(--row);font-weight:600}
+.steps .r{text-align:right}
+
+/* Log sheet */
+.card{background:var(--surface);border:1px solid var(--line);border-radius:18px;padding:18px;display:flex;flex-direction:column;gap:14px}
+.callout{background:var(--lcd);color:var(--lcd-ink);border-radius:12px;padding:10px 12px;font-size:.88rem}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+label{display:flex;flex-direction:column;gap:4px;font-size:.82rem;color:var(--muted);font-weight:500;min-width:0}
+input,select,textarea{font:inherit;font-size:16px;color:var(--fg);background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:10px 12px;width:100%;min-width:0}
+input[type=number]{font-family:var(--mono)}
+.stepper{display:flex;gap:6px}
+.stepper button{padding:8px 0;width:44px;flex:none}
+.stepper input{text-align:center}
+.formbtns{display:flex;gap:8px}
+.formbtns button{flex:1}
+.save{background:var(--fg);color:var(--surface);border-color:var(--fg)}
+
+/* Log list */
+.loghead{display:flex;justify-content:space-between;align-items:baseline;gap:10px}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.stat{border-top:2px solid var(--line);padding-top:8px}
+.stat .v{font-family:var(--mono);font-size:1.2rem;font-variant-numeric:tabular-nums}
+.stat .k{font-size:.75rem;color:var(--muted)}
+.log{list-style:none;margin:0;padding:0}
+.log li{display:grid;grid-template-columns:auto 1fr auto;gap:2px 12px;padding:12px 0;border-bottom:1px solid var(--line);align-items:baseline}
+.log .when{font-family:var(--mono);font-size:.9rem;min-width:4.6em}
+.log .what{min-width:0}
+.log .what small{display:block;color:var(--muted);font-size:.8rem;overflow-wrap:anywhere}
+.log .oz{font-family:var(--mono);font-weight:500;text-align:right}
+.log .oz small{display:block;font-weight:400;color:var(--muted);font-size:.78rem}
+.log li.day{display:block;padding:14px 0 2px;border:none;font-size:.72rem;letter-spacing:.09em;text-transform:uppercase;color:var(--muted);font-weight:600}
+.del{grid-column:1/-1;justify-self:end;font-size:.78rem;padding:4px 10px;min-height:0;color:var(--muted);font-weight:500;border-color:transparent;background:transparent}
+.del.confirm{color:var(--warn);border-color:var(--warn)}
+.empty{color:var(--muted);font-size:.9rem;padding:12px 0;margin:0}
+.small{font-size:.82rem;padding:8px 12px;min-height:36px}
+
+/* Info sheet */
+dialog{border:none;padding:0;background:var(--bg);color:var(--fg);width:100%;max-width:560px;max-height:100%;height:100%;margin:0 auto;inset:0}
+dialog::backdrop{background:rgba(10,15,22,.45)}
+.sheet{height:100%;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));
+  padding-top:max(14px,env(safe-area-inset-top,0px));padding-bottom:max(32px,env(safe-area-inset-bottom,0px))}
+.sheet-in{display:flex;flex-direction:column;gap:22px}
+.sheet h3{font-size:1.05rem;margin-bottom:6px}
+.sheet p{margin:0;max-width:62ch}
+.modes{display:flex;flex-direction:column;gap:10px}
+.modecard{border-radius:14px;padding:14px;display:flex;flex-direction:column;gap:6px;min-width:0}
+.modecard.m{background:var(--massage-soft)} .modecard.e{background:var(--express-soft)}
+.modecard h3{margin:0;display:flex;align-items:center;gap:6px}
+.modecard.m h3{color:var(--massage)} .modecard.e h3{color:var(--express)}
+.modecard p{font-size:.86rem}
+.modecard dl{margin:0;display:grid;grid-template-columns:auto 1fr;gap:2px 10px;font-size:.84rem}
+.modecard dt{color:var(--muted)} .modecard dd{margin:0;font-family:var(--mono)}
+.sheets{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.cheat{border:1px solid var(--line);border-radius:14px;padding:12px;background:var(--surface);min-width:0}
+.cheat table{width:100%;border-collapse:collapse;font-family:var(--mono);font-size:.82rem;font-variant-numeric:tabular-nums}
+.cheat th{font-family:var(--body);font-size:.64rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:600;text-align:left;padding:4px 0}
+.cheat td{padding:3px 0;border-top:1px solid var(--line)}
+.cheat td:first-child{width:2.2em}
+.cheat tr.m td:nth-child(2){color:var(--massage)} .cheat tr.e td:nth-child(2){color:var(--express)}
+.tips{margin:0;padding-left:1.1em;display:flex;flex-direction:column;gap:8px;max-width:62ch}
+.credit{font-size:.8rem;color:var(--muted)}
+@media (prefers-reduced-motion: reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- START -->
+  <section id="vStart" class="wrap" style="gap:18px">
+    <header class="bar"><span class="wordmark"><svg width="22" height="14" viewBox="0 0 22 14" aria-hidden="true"><path d="M1 7q1.25-4 2.5 0t2.5 0 2.5 0" fill="none" stroke="var(--massage)" stroke-width="2" stroke-linecap="round"/><path d="M8.5 7q3.25-6 6.5 0t6 0" fill="none" stroke="var(--express)" stroke-width="2" stroke-linecap="round"/></svg>Milk Run</span><span class="acts"><button class="iconbtn" id="infoBtn1" aria-label="Spectra guide"><svg width="22" height="22" viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="8.5" fill="none" stroke="currentColor" stroke-width="1.5"/><circle cx="10" cy="6.2" r="1.1" fill="currentColor"/><path d="M10 9v5.5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg></button></span></header>
+    <div class="head">
+      <div class="eyebrow" id="today"></div>
+      <h1>How long is this session?</h1>
+      <p class="sub" id="since" hidden></p>
+    </div>
+    <div class="lengths" id="lengths"></div>
+    <div style="display:flex;flex-direction:column;gap:12px">
+      <div class="loghead"><h2 class="sect">Log</h2><button class="link" id="exportBtn">Export CSV</button></div>
+      <div class="stats">
+        <div class="stat"><div class="v" id="sToday">0</div><div class="k">oz today</div></div>
+        <div class="stat"><div class="v" id="sCount">0</div><div class="k">sessions today</div></div>
+        <div class="stat"><div class="v" id="sAvg">–</div><div class="k">avg oz, 7 days</div></div>
+      </div>
+      <ul class="log" id="log"></ul>
+      <div class="credit">Saved on this phone only. Removing the home screen icon erases it, so export now and then.</div>
+    </div>
+  </section>
+
+  <!-- SESSION -->
+  <section id="vSession" class="session" hidden>
+    <header class="bar">
+      <button class="back" id="backBtn"><svg width="20" height="20" viewBox="0 0 18 18" aria-hidden="true"><path d="M11 3 5 9l6 6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>Sessions</button>
+      <span class="acts"><button class="iconbtn" id="soundBtn" aria-label="Sound on" aria-pressed="true"></button><button class="iconbtn" id="infoBtn2" aria-label="Spectra guide"><svg width="22" height="22" viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="8.5" fill="none" stroke="currentColor" stroke-width="1.5"/><circle cx="10" cy="6.2" r="1.1" fill="currentColor"/><path d="M10 9v5.5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg></button></span>
+    </header>
+    <div class="head">
+      <div class="eyebrow">Session</div>
+      <h1 id="sessTitle">20 minutes</h1>
+      <p class="sub" id="sessSub" style="font-variant-numeric:tabular-nums"></p>
+    </div>
+
+    <div class="lcd" aria-live="off">
+      <div class="cell"><div class="v" id="lcdCycle">70</div><div class="k">CYCLE</div></div>
+      <div class="mid"><div class="clock" id="clock">1:00</div><svg class="wave" viewBox="0 0 150 22" preserveAspectRatio="none" aria-hidden="true"><path id="wavePath" d=""/></svg></div>
+      <div class="cell"><div class="v" id="lcdVac">L2–3</div><div class="k">VACUUM</div></div>
+    </div>
+    <div class="modeline">
+      <div class="mode-name" id="modeName">Letdown</div>
+      <div class="awake" id="awake" aria-live="polite"></div>
+    </div>
+    <p class="tip" id="tip" aria-live="polite"></p>
+    <div class="controls">
+      <button id="plusBtn" disabled>+1 min</button>
+      <button class="primary" id="startBtn">Start</button>
+      <button id="skipBtn" disabled>Next step</button>
+      <button class="ghost endbtn" id="endBtn" disabled>End &amp; log</button>
+    </div>
+    <ol class="steps" id="steps"></ol>
+  </section>
+
+  <!-- LOG -->
+  <section id="vLog" class="wrap" style="gap:18px" hidden>
+    <header class="bar"><span class="wordmark"><svg width="22" height="14" viewBox="0 0 22 14" aria-hidden="true"><path d="M1 7q1.25-4 2.5 0t2.5 0 2.5 0" fill="none" stroke="var(--massage)" stroke-width="2" stroke-linecap="round"/><path d="M8.5 7q3.25-6 6.5 0t6 0" fill="none" stroke="var(--express)" stroke-width="2" stroke-linecap="round"/></svg>Milk Run</span><span class="acts"><button class="iconbtn" id="infoBtn3" aria-label="Spectra guide"><svg width="22" height="22" viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="8.5" fill="none" stroke="currentColor" stroke-width="1.5"/><circle cx="10" cy="6.2" r="1.1" fill="currentColor"/><path d="M10 9v5.5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg></button></span></header>
+    <div class="head">
+      <div class="eyebrow">Session done</div>
+      <h1>How much did you pump?</h1>
+      <p class="sub" id="logSub"></p>
+    </div>
+    <div class="callout">Before you power off, turn the vacuum down to L1 or L2. Your Spectra starts the next session on its last settings.</div>
+    <div class="card">
+      <div class="row">
+        <label for="ozL">Left (oz)
+          <div class="stepper"><button type="button" data-step="ozL:-0.25" aria-label="Less left">−</button><input id="ozL" type="number" inputmode="decimal" step="0.25" min="0" value="0"><button type="button" data-step="ozL:0.25" aria-label="More left">+</button></div>
+        </label>
+        <label for="ozR">Right (oz)
+          <div class="stepper"><button type="button" data-step="ozR:-0.25" aria-label="Less right">−</button><input id="ozR" type="number" inputmode="decimal" step="0.25" min="0" value="0"><button type="button" data-step="ozR:0.25" aria-label="More right">+</button></div>
+        </label>
+      </div>
+      <div class="row">
+        <label for="vacUsed">Highest vacuum used<select id="vacUsed"></select></label>
+        <label for="durUsed">Minutes<input id="durUsed" type="number" inputmode="numeric" min="0" step="1"></label>
+      </div>
+      <label for="note">Note<textarea id="note" rows="2" placeholder="Comfort, letdowns, anything to try next time"></textarea></label>
+      <div class="formbtns">
+        <button type="button" id="discardBtn">Discard</button>
+        <button type="button" class="save" id="saveBtn">Save</button>
+      </div>
+    </div>
+  </section>
+</div>
+
+<!-- INFO -->
+<dialog id="info" aria-labelledby="infoTitle">
+  <div class="sheet"><div class="sheet-in">
+    <header class="bar"><span class="wordmark"><svg width="22" height="14" viewBox="0 0 22 14" aria-hidden="true"><path d="M1 7q1.25-4 2.5 0t2.5 0 2.5 0" fill="none" stroke="var(--massage)" stroke-width="2" stroke-linecap="round"/><path d="M8.5 7q3.25-6 6.5 0t6 0" fill="none" stroke="var(--express)" stroke-width="2" stroke-linecap="round"/></svg>Milk Run</span><span class="acts"><button class="iconbtn" id="closeInfo" aria-label="Close"><svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><path d="M4 4l10 10M14 4 4 14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button></span></header>
+    <div class="head">
+      <div class="eyebrow">Guide</div>
+      <h1 id="infoTitle">Your Spectra</h1>
+    </div>
+    <div>
+      <h3>Two modes</h3>
+      <p style="margin-bottom:10px">The button with the wavy lines switches between them. The pump screen shows cycle on the left, the timer in the middle and vacuum (L) on the right.</p>
+      <div class="modes">
+        <div class="modecard m">
+          <h3><svg width="18" height="12" viewBox="0 0 18 12" aria-hidden="true"><path d="M1 3q2-2 4 0t4 0 4 0 4 0M1 9q2-2 4 0t4 0 4 0 4 0" stroke="currentColor" fill="none" stroke-width="1.6" stroke-linecap="round"/></svg>Letdown</h3>
+          <p>Fast, light suction to get milk flowing. Also called massage mode. The wave icon shows on screen.</p>
+          <dl><dt>Cycle</dt><dd>70 (fixed)</dd><dt>Vacuum</dt><dd>L1–L5</dd></dl>
+        </div>
+        <div class="modecard e">
+          <h3>Expression</h3>
+          <p>Slower, deeper suction once milk is flowing.</p>
+          <dl><dt>Cycle</dt><dd>38 42 46 50 54</dd><dt>Vacuum</dt><dd>L1–L12</dd></dl>
+        </div>
+      </div>
+    </div>
+    <div>
+      <h3>Tips</h3>
+      <ul class="tips">
+        <li>Use the strongest vacuum that's still comfortable, never painful. Pain can hold back letdown.</li>
+        <li>If flow stops early, go back to letdown mode for a minute or two to bring on another letdown, then return to expression.</li>
+        <li>The Spectra starts on its last settings, so turn the vacuum down before powering off.</li>
+        <li>The pump powers itself off after 30 minutes.</li>
+        <li>If the timer screen says "Screen may sleep", set Settings → Display &amp; Brightness → Auto-Lock to Never during sessions, and turn off Low Power Mode.</li>
+        <li>Lean forward a little to help milk into the bottles.</li>
+      </ul>
+    </div>
+    <p class="credit">Session plans from the PumpingMamas Spectra cheat sheet. Mode details from Spectra's S1/S2 guide. A lactation consultant (IBCLC) can help tune settings and flange fit.</p>
+  </div></div>
+</dialog>
+
+<script>
+(function(){
+  const $ = id => document.getElementById(id);
+  const store = { get(k,d){try{const v=localStorage.getItem(k);return v==null?d:JSON.parse(v)}catch(e){return d}},
+                  set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}},
+                  del(k){try{localStorage.removeItem(k)}catch(e){}} };
+
+  // ---------- recipes (PumpingMamas Spectra cheat sheet) ----------
+  const P = (min,cpm,vac) => ({mode: cpm===70?"massage":"express", min, cpm, vac});
+  const BASE = [P(1,70,"2–3"),P(1,70,"4–5")];
+  const RECIPES = {
+    15:[...BASE,P(7,54,"5–8"),P(2,70,"4–5"),P(4,46,"6–10")],
+    20:[...BASE,P(8,54,"5–8"),P(2,70,"4–5"),P(8,46,"6–10")],
+    25:[...BASE,P(8,54,"5–8"),P(2,70,"4–5"),P(8,50,"6–10"),P(2,70,"4–5"),P(3,46,"8–12")],
+    30:[...BASE,P(8,54,"5–8"),P(2,70,"4–5"),P(8,50,"6–10"),P(2,70,"4–5"),P(8,46,"8–12")],
+  };
+  const letdowns = r => r.filter((s,i)=>s.mode==="massage" && (i===0 || r[i-1].mode!=="massage")).length;
+
+  function tipFor(s, prev){
+    if(s.mode==="hands") return s.tip;
+    if(s.mode==="massage"){
+      if(!prev || prev.mode==="hands") return `Power on and press the wavy-line button for letdown mode. Set vacuum to L${s.vac}.`;
+      if(prev.mode==="massage") return `Stay in letdown mode. Raise vacuum to L${s.vac} if it's comfortable.`;
+      return `Press the wavy-line button to go back to letdown mode, vacuum L${s.vac}. This brings on another letdown.`;
+    }
+    if(prev && prev.mode==="express") return `Stay in expression. Change cycle to ${s.cpm} and vacuum to around L${s.vac}.`;
+    return `Press the wavy-line button for expression mode. Set cycle to ${s.cpm} and vacuum to your strongest comfortable level, around L${s.vac}.`;
+  }
+  const modeLabel = m => m==="massage"?"Letdown":m==="express"?"Expression":"Hands only";
+  const WAVY = '<svg width="20" height="13" viewBox="0 0 18 12" aria-hidden="true"><path d="M1 3q2-2 4 0t4 0 4 0 4 0M1 9q2-2 4 0t4 0 4 0 4 0" stroke="currentColor" fill="none" stroke-width="1.6" stroke-linecap="round"/></svg>';
+  const fmt = s => { s=Math.max(0,Math.round(s)); return Math.floor(s/60)+":"+String(s%60).padStart(2,"0"); };
+  const colorOf = m => m==="massage"?"var(--massage)":m==="express"?"var(--express)":"var(--hands)";
+  const softOf = m => m==="massage"?"var(--massage-soft)":m==="express"?"var(--express-soft)":"var(--hands-soft)";
+
+  // ---------- views ----------
+  function show(v){ ["vStart","vSession","vLog"].forEach(id=>$(id).hidden = id!==v); window.scrollTo(0,0); }
+
+  function renderLengths(){
+    $("lengths").innerHTML = "";
+    Object.keys(RECIPES).forEach(k=>{
+      const r = RECIPES[k], b = document.createElement("button");
+      b.className = "len"; b.type="button"; b.id="len-"+k;
+      const total = r.reduce((a,s)=>a+s.min,0);
+      b.innerHTML = `<span class="m">${k}<small>min</small></span><span class="sub"><span class="nw">${r.length} steps</span> <span class="nw">· ${letdowns(r)} letdowns</span></span><span class="seg">${r.map(s=>`<i style="flex:${s.min};background:${colorOf(s.mode)}"></i>`).join("")}</span>`;
+      b.setAttribute("aria-label", `${k} minute session, ${r.length} steps`);
+      b.onclick = () => openSession(k);
+      $("lengths").appendChild(b);
+    });
+  }
+
+  // ---------- session engine ----------
+  let S = null, tickH = null, actx = null, wake = null;
+  function build(key){
+    const core = RECIPES[key].map(s=>({...s}));
+    const list = core;
+    list.forEach((s,i)=>{ s.sec = s.min*60; s.tip = tipFor(s, list[i-1]); });
+    return list;
+  }
+  function openSession(key){
+    S = { key, steps: build(key), idx:0, stepElapsed:0, totalElapsed:0, lastTick:0, running:false, paused:false, startedAt:0 };
+    show("vSession"); render();
+  }
+  const persist = () => { if(S && S.running) store.set("pump.run", S); else store.del("pump.run"); };
+
+  function render(){
+    const s = S.steps[S.idx];
+    const el = $("vSession");
+    el.classList.toggle("express", s.mode==="express");
+    el.classList.toggle("hands", s.mode==="hands");
+    el.classList.toggle("running", S.running);
+    $("sessTitle").textContent = `${S.key} minutes`;
+    $("lcdCycle").textContent = s.mode==="hands" ? "--" : s.cpm;
+    $("lcdVac").textContent = s.mode==="hands" ? "OFF" : "L"+s.vac;
+    $("clock").textContent = fmt(s.sec - S.stepElapsed);
+    $("modeName").innerHTML = (s.mode==="massage"?WAVY:"") + (s.label || modeLabel(s.mode));
+    const plan = S.steps.reduce((a,x)=>a+x.sec,0);
+    $("sessSub").textContent = S.running ? `Step ${S.idx+1} of ${S.steps.length} · ${fmt(S.totalElapsed)} of ${fmt(plan)}` : `${S.steps.length} steps · ${letdowns(S.steps)} letdowns`;
+    paintAwake();
+    $("tip").textContent = s.tip;
+    $("startBtn").textContent = !S.running ? "Start" : S.paused ? "Resume" : "Pause";
+    $("skipBtn").textContent = S.idx===S.steps.length-1 ? "Finish" : "Next step";
+    $("skipBtn").disabled = $("plusBtn").disabled = $("endBtn").disabled = !S.running;
+    $("backBtn").disabled = S.running;
+    const ol = $("steps");
+    ol.innerHTML = `<li class="head"><span>Min</span><span>Mode</span><span class="r">Cycle</span><span class="r">Vacuum</span></li>` +
+      S.steps.map((x,i)=>{
+        const cls = i<S.idx?"done":i===S.idx?"cur":"";
+        const p = i<S.idx?0:i===S.idx&&S.running?Math.min(100,S.stepElapsed/x.sec*100):0;
+        return `<li class="${cls}" style="--row:${colorOf(x.mode)};--row-soft:${softOf(x.mode)};--p:${p.toFixed(1)}%"><span class="fill"></span><span class="num">${Math.round(x.sec/60*10)/10}</span><span class="mn">${x.label||modeLabel(x.mode)}</span><span class="r num">${x.mode==="hands"?"–":x.cpm}</span><span class="r num">${x.mode==="hands"?"–":"L"+x.vac}</span></li>`;
+      }).join("");
+    setWave(s.mode==="hands"?0:s.cpm);
+  }
+
+  // wave on the LCD, density follows cycle speed
+  let wavePhase=0, waveCpm=70, raf=null, lastWave=0;
+  const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  function paintWave(){
+    let d="";
+    if(!waveCpm){ d="M0 11L150 11"; }
+    else { const cyc = waveCpm/16; for(let x=0;x<=150;x+=3){ const y=11+8*Math.sin((x/150)*cyc*2*Math.PI - wavePhase); d+=(x?"L":"M")+x+" "+y.toFixed(1); } }
+    $("wavePath").setAttribute("d",d);
+  }
+  function setWave(cpm){ waveCpm=cpm; if(!raf) paintWave(); if(S && S.running && !S.paused && !reduced && !raf) raf=requestAnimationFrame(anim); }
+  function anim(t){
+    if(lastWave) wavePhase += ((t-lastWave)/1000)*(waveCpm/60)*2*Math.PI;
+    lastWave=t; paintWave();
+    if(S && S.running && !S.paused && !reduced && !document.hidden) raf=requestAnimationFrame(anim); else { raf=null; lastWave=0; }
+  }
+
+  // ---------- sound ----------
+  let soundOn = store.get("pump.sound", true), master=null;
+  const SPK_ON = '<svg width="20" height="20" viewBox="0 0 20 20" aria-hidden="true"><path d="M3 7.5h3l4-3.5v12l-4-3.5H3z" fill="currentColor"/><path d="M13 7a4 4 0 0 1 0 6M15.3 4.8a7 7 0 0 1 0 10.4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>';
+  const SPK_OFF = '<svg width="20" height="20" viewBox="0 0 20 20" aria-hidden="true"><path d="M3 7.5h3l4-3.5v12l-4-3.5H3z" fill="currentColor"/><path d="M13 7.5l5 5M18 7.5l-5 5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>';
+  function paintSound(){ const b=$("soundBtn"); b.innerHTML = soundOn?SPK_ON:SPK_OFF; b.setAttribute("aria-pressed", soundOn); b.setAttribute("aria-label", soundOn?"Sound on":"Sound off"); }
+  function ensureAudio(){
+    try{
+      // "playback" lets iPhone sounds play even with the silent switch on (Safari 16.4+)
+      if(navigator.audioSession && navigator.audioSession.type!=="playback") navigator.audioSession.type="playback";
+      if(!actx){
+        actx = new (window.AudioContext||window.webkitAudioContext)();
+        const comp = actx.createDynamicsCompressor(); comp.connect(actx.destination);
+        master = actx.createGain(); master.gain.value = 0.9; master.connect(comp);
+      }
+      if(actx.state!=="running") actx.resume();
+      const b=actx.createBuffer(1,1,22050), src=actx.createBufferSource(); src.buffer=b; src.connect(actx.destination); src.start(0);
+    }catch(e){}
+  }
+  document.addEventListener("pointerdown", ensureAudio, {passive:true});
+  // bell: fundamental plus inharmonic partials with a long decay
+  function bell(freq, at, dur=1.6, vol=0.7){
+    [[1,1],[2.76,.32],[5.4,.12],[0.5,.18]].forEach(([r,g])=>{
+      const o=actx.createOscillator(), gn=actx.createGain(); o.type="sine"; o.frequency.value=freq*r;
+      gn.gain.setValueAtTime(0,at); gn.gain.linearRampToValueAtTime(vol*g,at+0.006); gn.gain.exponentialRampToValueAtTime(0.0001,at+dur*(r>2?0.45:1));
+      o.connect(gn).connect(master); o.start(at); o.stop(at+dur+0.05);
+    });
+  }
+  function pip(){ if(!soundOn||!actx) return; const t=actx.currentTime, o=actx.createOscillator(), g=actx.createGain(); o.type="sine"; o.frequency.value=1568;
+    g.gain.setValueAtTime(0,t); g.gain.linearRampToValueAtTime(0.35,t+0.005); g.gain.exponentialRampToValueAtTime(0.0001,t+0.12); o.connect(g).connect(master); o.start(t); o.stop(t+0.15); }
+  function chime(kind){
+    try{ navigator.vibrate && navigator.vibrate(kind==="massage"?[150,100,150]:[400]); }catch(e){}
+    if(!soundOn||!actx) return;
+    const t=actx.currentTime+0.02;
+    if(kind==="massage"){ bell(1319,t); bell(1319,t+0.4); }          // letdown: two high dings
+    else if(kind==="done"){ bell(784,t); bell(988,t+0.3); bell(1319,t+0.6,2.2); }
+    else { bell(988,t); bell(740,t+0.45,2); }                          // expression: high then low
+  }
+  $("soundBtn").onclick = () => { soundOn=!soundOn; store.set("pump.sound",soundOn); paintSound(); if(soundOn){ ensureAudio(); setTimeout(()=>chime(S?S.steps[S.idx].mode:"express"),60); } };
+  paintSound();
+  // ---------- keep the screen on ----------
+  // Native wake lock first. iPhones before iOS 18.4 ignore it in home screen apps, so they also loop a tiny silent video.
+  const KEEP_MP4 = "data:video/mp4;base64,AAAAIGZ0eXBpc29tAAACAGlzb21pc28yYXZjMW1wNDEAAAMpbW9vdgAAAGxtdmhkAAAAAAAAAAAAAAAAAAAD6AAAB9AAAQAAAQAAAAAAAAAAAAAAAAEAAAAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAlN0cmFrAAAAXHRraGQAAAADAAAAAAAAAAAAAAABAAAAAAAAB9AAAAAAAAAAAAAAAAAAAAAAAAEAAAAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAAAABAAAAAABAAAAAQAAAAAAAkZWR0cwAAABxlbHN0AAAAAAAAAAEAAAfQAAAAAAABAAAAAAHLbWRpYQAAACBtZGhkAAAAAAAAAAAAAAAAAABAAAAAgABVxAAAAAAALWhkbHIAAAAAAAAAAHZpZGUAAAAAAAAAAAAAAABWaWRlb0hhbmRsZXIAAAABdm1pbmYAAAAUdm1oZAAAAAEAAAAAAAAAAAAAACRkaW5mAAAAHGRyZWYAAAAAAAAAAQAAAAx1cmwgAAAAAQAAATZzdGJsAAAAtnN0c2QAAAAAAAAAAQAAAKZhdmMxAAAAAAAAAAEAAAAAAAAAAAAAAAAAAAAAABAAEABIAAAASAAAAAAAAAABFUxhdmM2MC4zMS4xMDIgbGlieDI2NAAAAAAAAAAAAAAAGP//AAAALGF2Y0MBQsAK/+EAFWdCwAraewEQAAADABAAAAMAIPEiagEABGjOD8gAAAAQcGFzcAAAAAEAAAABAAAAFGJ0cnQAAAAAAAAKOAAACjgAAAAYc3R0cwAAAAAAAAABAAAAAgAAQAAAAAAUc3RzcwAAAAAAAAABAAAAAQAAABxzdHNjAAAAAAAAAAEAAAABAAAAAgAAAAEAAAAcc3RzegAAAAAAAAAAAAAAAgAAAoUAAAAJAAAAFHN0Y28AAAAAAAAAAQAAA1kAAABidWR0YQAAAFptZXRhAAAAAAAAACFoZGxyAAAAAAAAAABtZGlyYXBwbAAAAAAAAAAAAAAAAC1pbHN0AAAAJal0b28AAAAdZGF0YQAAAAEAAAAATGF2ZjYwLjE2LjEwMAAAAAhmcmVlAAAClm1kYXQAAAJvBgX//2vcRem95tlIt5Ys2CDZI+7veDI2NCAtIGNvcmUgMTY0IHIzMTA4IDMxZTE5ZjkgLSBILjI2NC9NUEVHLTQgQVZDIGNvZGVjIC0gQ29weWxlZnQgMjAwMy0yMDIzIC0gaHR0cDovL3d3dy52aWRlb2xhbi5vcmcveDI2NC5odG1sIC0gb3B0aW9uczogY2FiYWM9MCByZWY9MSBkZWJsb2NrPTE6MDowIGFuYWx5c2U9MHgxOjB4MTExIG1lPWhleCBzdWJtZT0yIHBzeT0xIHBzeV9yZD0xLjAwOjAuMDAgbWl4ZWRfcmVmPTAgbWVfcmFuZ2U9MTYgY2hyb21hX21lPTEgdHJlbGxpcz0wIDh4OGRjdD0wIGNxbT0wIGRlYWR6b25lPTIxLDExIGZhc3RfcHNraXA9MSBjaHJvbWFfcXBfb2Zmc2V0PTAgdGhyZWFkcz0xIGxvb2thaGVhZF90aHJlYWRzPTEgc2xpY2VkX3RocmVhZHM9MCBucj0wIGRlY2ltYXRlPTEgaW50ZXJsYWNlZD0wIGJsdXJheV9jb21wYXQ9MCBjb25zdHJhaW5lZF9pbnRyYT0wIGJmcmFtZXM9MCB3ZWlnaHRwPTAga2V5aW50PTI1MCBrZXlpbnRfbWluPTEgc2NlbmVjdXQ9NDAgaW50cmFfcmVmcmVzaD0wIHJjX2xvb2thaGVhZD0xMCByYz1jcmYgbWJ0cmVlPTEgY3JmPTIzLjAgcWNvbXA9MC42MCBxcG1pbj0wIHFwbWF4PTY5IHFwc3RlcD00IGlwX3JhdGlvPTEuNDAgYXE9MToxLjAwAIAAAAAOZYiEBb///w9FAAFPf4AAAAAFQZogFfU=";
+  const UA = navigator.userAgent, iosV = UA.match(/OS (\d+)_(\d+)/);
+  const isIOS = /iPhone|iPad|iPod/.test(UA) || (navigator.platform==="MacIntel" && navigator.maxTouchPoints>1);
+  const standalone = navigator.standalone || matchMedia("(display-mode: standalone)").matches;
+  const needVideo = !("wakeLock" in navigator) || (isIOS && standalone && iosV && (+iosV[1]<18 || (+iosV[1]===18 && +iosV[2]<4)));
+  let keepVid=null, awakeState="";
+  function playVideo(){
+    try{
+      if(!keepVid){ keepVid=document.createElement("video"); keepVid.setAttribute("playsinline",""); keepVid.setAttribute("muted",""); keepVid.muted=true; keepVid.loop=true;
+        keepVid.src=KEEP_MP4; keepVid.style.cssText="position:fixed;left:0;bottom:0;width:1px;height:1px;opacity:.01;pointer-events:none"; document.body.appendChild(keepVid); }
+      const pr=keepVid.play(); if(pr) pr.then(()=>{ if(awakeState!=="ok"){ awakeState="ok"; paintAwake(); } }).catch(()=>{ if(!wake){ awakeState="bad"; paintAwake(); } });
+    }catch(e){}
+  }
+  function keepAwake(){
+    if(needVideo) playVideo();
+    if("wakeLock" in navigator && !wake){
+      navigator.wakeLock.request("screen").then(l=>{ wake=l; awakeState="ok"; paintAwake(); l.addEventListener("release",()=>{ wake=null; }); })
+        .catch(()=>{ if(!needVideo){ awakeState="bad"; paintAwake(); } });
+    } else if(!needVideo && !("wakeLock" in navigator)){ awakeState="bad"; }
+    paintAwake();
+  }
+  function releaseAwake(){ try{ wake && wake.release(); }catch(e){} wake=null; try{ keepVid && keepVid.pause(); }catch(e){} awakeState=""; paintAwake(); }
+  function paintAwake(){
+    const el=$("awake"); if(!el) return;
+    if(!S || !S.running || !awakeState){ el.className="awake"; el.textContent=""; return; }
+    el.className="awake "+awakeState;
+    el.innerHTML = awakeState==="ok" ? "<i></i>Screen stays on" : "<i></i>Screen may sleep";
+  }
+  document.addEventListener("visibilitychange",()=>{ if(!document.hidden && S && S.running){ if(!S.paused) keepAwake(); tick(); setWave(waveCpm); } });
+
+  function tick(){
+    const now=Date.now(), dt=(now-S.lastTick)/1000; S.lastTick=now;
+    if(!S.paused){
+      S.stepElapsed+=dt; S.totalElapsed+=dt;
+      let moved=false;
+      while(S.stepElapsed>=S.steps[S.idx].sec){
+        if(S.idx===S.steps.length-1){ S.stepElapsed=S.steps[S.idx].sec; finish(true); return; }
+        S.stepElapsed-=S.steps[S.idx].sec; S.idx++; moved=true;
+      }
+      if(moved) chime(S.steps[S.idx].mode);
+      else {
+        const left = Math.ceil(S.steps[S.idx].sec - S.stepElapsed), key = S.idx+":"+left;
+        if(left>=1 && left<=3 && S.pipped!==key){ S.pipped=key; pip(); }
+      }
+    }
+    persist(); render();
+  }
+  function run(){ clearInterval(tickH); tickH=setInterval(tick,250); }
+  $("startBtn").onclick = () => {
+    ensureAudio();
+    if(!S.running){ S.running=true; S.paused=false; S.startedAt=Date.now(); S.lastTick=Date.now(); run(); keepAwake(); }
+    else { S.paused=!S.paused; S.lastTick=Date.now(); if(!S.paused) keepAwake(); }
+    persist(); render();
+  };
+  $("skipBtn").onclick = () => {
+    if(S.idx===S.steps.length-1) return finish(false);
+    S.totalElapsed += 0; S.idx++; S.stepElapsed=0; chime(S.steps[S.idx].mode); persist(); render();
+  };
+  $("plusBtn").onclick = () => { S.steps[S.idx].sec+=60; persist(); render(); };
+  let endArmed=null;
+  function disarmEnd(){ clearTimeout(endArmed); endArmed=null; $("endBtn").classList.remove("confirm"); $("endBtn").innerHTML="End &amp; log"; }
+  $("endBtn").onclick = () => {
+    if(!endArmed){ $("endBtn").classList.add("confirm"); $("endBtn").textContent="Tap again to end the session"; endArmed=setTimeout(disarmEnd,3000); return; }
+    disarmEnd(); finish(false);
+  };
+  $("backBtn").onclick = () => { releaseAwake(); S=null; store.del("pump.run"); renderLengths(); show("vStart"); };
+
+  function finish(auto){
+    clearInterval(tickH); tickH=null;
+    releaseAwake();
+    if(auto) chime("done");
+    const pumpSteps = S.steps.slice(0,S.idx+1).filter(s=>s.mode==="express");
+    const tops = pumpSteps.map(s=>parseInt(String(s.vac).split("–").pop(),10)).filter(Boolean);
+    $("vacUsed").value = String(Math.min(12, tops.length?Math.max(...tops):6));
+    $("durUsed").value = Math.max(1, Math.round(S.totalElapsed/60));
+    $("ozL").value="0"; $("ozR").value="0"; $("note").value="";
+    $("logSub").textContent = `${S.key} minute session · ${Math.max(1, Math.round(S.totalElapsed/60))} min pumped`;
+    S.running=false; store.del("pump.run"); paintAwake();
+    show("vLog");
+  }
+
+  // ---------- log ----------
+  for(let v=1;v<=12;v++){ const o=document.createElement("option"); o.value=v; o.textContent="L"+v; $("vacUsed").appendChild(o); }
+  document.querySelectorAll("[data-step]").forEach(b=>b.onclick=()=>{ const [id,d]=b.dataset.step.split(":"); const i=$(id); const v=Math.max(0,(parseFloat(i.value)||0)+parseFloat(d)); i.value=String(Math.round(v*100)/100); });
+  let sessions = store.get("pump.sessions", []);
+  $("discardBtn").onclick = () => { S=null; renderLengths(); renderLog(); show("vStart"); };
+  $("saveBtn").onclick = () => {
+    sessions = [{ id:"s"+Date.now(), startedAt:S&&S.startedAt||Date.now(), minutes:parseInt($("durUsed").value,10)||0,
+      left:parseFloat($("ozL").value)||0, right:parseFloat($("ozR").value)||0, vacuum:parseInt($("vacUsed").value,10)||null,
+      recipe:S?S.key+" min":"", note:$("note").value.trim().slice(0,500) }, ...sessions];
+    store.set("pump.sessions", sessions);
+    S=null; renderLengths(); renderLog(); show("vStart");
+  };
+
+  const dayKey = t => new Date(t).toDateString();
+  const oz = s => (s.left||0)+(s.right||0);
+  function renderLog(){
+    const list=[...sessions].sort((a,b)=>b.startedAt-a.startedAt), today=dayKey(Date.now());
+    const todays=list.filter(s=>dayKey(s.startedAt)===today);
+    $("sToday").textContent = +todays.reduce((a,s)=>a+oz(s),0).toFixed(2);
+    $("sCount").textContent = todays.length;
+    const wk=list.filter(s=>Date.now()-s.startedAt<7*864e5);
+    $("sAvg").textContent = wk.length?(wk.reduce((a,s)=>a+oz(s),0)/wk.length).toFixed(1):"–";
+    if(list[0]){ const m=Math.round((Date.now()-list[0].startedAt)/60000); $("since").hidden=false; $("since").textContent="Last session "+(m<60?m+" min":Math.floor(m/60)+"h "+(m%60)+"m")+" ago."; }
+    const ul=$("log"); ul.innerHTML="";
+    if(!list.length){ ul.innerHTML='<li class="empty" style="display:block;border:none">No sessions yet. After a session you can log ounces from each side.</li>'; return; }
+    let lastDay="";
+    list.slice(0,40).forEach(s=>{
+      const dk=dayKey(s.startedAt);
+      if(dk!==lastDay){ lastDay=dk; const h=document.createElement("li"); h.className="day"; h.textContent=dk===today?"Today":new Date(s.startedAt).toLocaleDateString(undefined,{weekday:"short",month:"short",day:"numeric"}); ul.appendChild(h); }
+      const li=document.createElement("li");
+      li.innerHTML=`<span class="when"></span><span class="what"><span class="r"></span><small></small></span><span class="oz"><span class="t"></span><small></small></span><button class="del" type="button">Delete</button>`;
+      li.querySelector(".when").textContent=new Date(s.startedAt).toLocaleTimeString(undefined,{hour:"numeric",minute:"2-digit"});
+      li.querySelector(".r").textContent=(s.recipe||"Session")+(s.minutes?` · ${s.minutes} min`:"");
+      li.querySelector(".what small").textContent=[s.vacuum?"up to L"+s.vacuum:"", s.note||""].filter(Boolean).join(" · ");
+      li.querySelector(".t").textContent=+oz(s).toFixed(2)+" oz";
+      li.querySelector(".oz small").textContent=`L ${+(s.left||0)} · R ${+(s.right||0)}`;
+      const del=li.querySelector(".del"); let armed=false, t=null;
+      del.onclick=()=>{ if(!armed){ armed=true; del.classList.add("confirm"); del.textContent="Tap again to delete"; t=setTimeout(()=>{armed=false;del.classList.remove("confirm");del.textContent="Delete";},3000); return; }
+        clearTimeout(t); sessions=sessions.filter(x=>x.id!==s.id); store.set("pump.sessions",sessions); renderLog(); };
+      ul.appendChild(li);
+    });
+  }
+  setInterval(()=>{ if(!$("vStart").hidden) renderLog(); }, 60000);
+
+  $("exportBtn").onclick = async () => {
+    const q = v => `"${String(v??"").replace(/"/g,'""')}"`;
+    const rows=[["date","time","session","minutes","left_oz","right_oz","total_oz","max_vacuum","note"]];
+    [...sessions].sort((a,b)=>a.startedAt-b.startedAt).forEach(s=>{ const d=new Date(s.startedAt);
+      rows.push([d.toISOString().slice(0,10), d.toTimeString().slice(0,5), s.recipe, s.minutes, s.left, s.right, oz(s), s.vacuum, s.note]); });
+    const csv=rows.map(r=>r.map(q).join(",")).join("\n");
+    const name=`pump-log-${new Date().toISOString().slice(0,10)}.csv`;
+    try{ const f=new File([csv],name,{type:"text/csv"}); if(navigator.canShare && navigator.canShare({files:[f]})){ await navigator.share({files:[f]}); return; } }catch(e){ if(e && e.name==="AbortError") return; }
+    const a=document.createElement("a"); a.href=URL.createObjectURL(new Blob([csv],{type:"text/csv"})); a.download=name; document.body.appendChild(a); a.click(); setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},1000);
+  };
+
+  // ---------- info sheet ----------
+  const openInfo = () => { const d=$("info"); if(d.showModal) d.showModal(); else d.setAttribute("open",""); };
+  $("infoBtn1").onclick = openInfo; $("infoBtn2").onclick = openInfo; $("infoBtn3").onclick = openInfo;
+  $("closeInfo").onclick = () => { const d=$("info"); d.close ? d.close() : d.removeAttribute("open"); };
+  $("info").addEventListener("click", e => { if(e.target===$("info")) $("closeInfo").click(); });
+
+  // ---------- boot ----------
+  $("today").textContent = new Date().toLocaleDateString(undefined,{weekday:"long",month:"long",day:"numeric"});
+  renderLengths(); renderLog();
+  const saved = store.get("pump.run", null);
+  if(saved && saved.running && Date.now()-saved.lastTick < 2*3600e3){ S=saved; show("vSession"); run(); tick(); }
+  else store.del("pump.run");
+  if("serviceWorker" in navigator && location.protocol==="https:") navigator.serviceWorker.register("sw.js").catch(()=>{});
+})();
+</script>
+</body>
+</html>
