@@ -1,6 +1,6 @@
 // Offline support: serve from cache, refresh in the background.
 // Bump this name when you want to force everything to re-download.
-const CACHE = "pump-v6";
+const CACHE = "pump-v7";
 const CORE = ["./", "./index.html", "./manifest.webmanifest", "./icon-180.png", "./icon-192.png", "./icon.svg"];
 
 self.addEventListener("install", e => {

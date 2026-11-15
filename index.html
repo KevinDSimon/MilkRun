@@ -308,7 +308,7 @@ dialog::backdrop{background:rgba(10,15,22,.45)}
         <li>Lean forward a little to help milk into the bottles.</li>
       </ul>
     </div>
-    <p class="credit">Session plans from the PumpingMamas Spectra cheat sheet. Mode details from Spectra's S1/S2 guide. A lactation consultant (IBCLC) can help tune settings and flange fit.</p>
+    <p class="credit">Session plans from the PumpingMamas Spectra cheat sheet; power pumping from Spectra Baby USA. Mode details from Spectra's S1/S2 guide. A lactation consultant (IBCLC) can help tune settings and flange fit.</p>
   </div></div>
 </dialog>
 
@@ -321,13 +321,18 @@ dialog::backdrop{background:rgba(10,15,22,.45)}
 
   // ---------- recipes (PumpingMamas Spectra cheat sheet) ----------
   const P = (min,cpm,vac) => ({mode: cpm===70?"massage":"express", min, cpm, vac});
+  const REST = min => ({mode:"hands", label:"Rest", min, tip:"Rest. Turn the pump off and take the flanges off. Don't pump during this break."});
   const BASE = [P(1,70,"2–3"),P(1,70,"4–5")];
   const RECIPES = {
     15:[...BASE,P(7,54,"5–8"),P(2,70,"4–5"),P(4,46,"6–10")],
     20:[...BASE,P(8,54,"5–8"),P(2,70,"4–5"),P(8,46,"6–10")],
     25:[...BASE,P(8,54,"5–8"),P(2,70,"4–5"),P(8,50,"6–10"),P(2,70,"4–5"),P(3,46,"8–12")],
-    30:[...BASE,P(8,54,"5–8"),P(2,70,"4–5"),P(8,50,"6–10"),P(2,70,"4–5"),P(8,46,"8–12")],
+    // Spectra power pumping routine: pump 20, rest 10, pump 10, rest 10, pump 10
+    60:[P(5,70,"3–5"),P(5,54,"6–10"),P(5,70,"4–5"),P(5,38,"6–10"),REST(10),
+        P(5,70,"3–5"),P(5,54,"6–10"),REST(10),
+        P(5,70,"3–5"),P(5,38,"6–10")],
   };
+  const NAMES = {60:"Power pump"};
   const letdowns = r => r.filter((s,i)=>s.mode==="massage" && (i===0 || r[i-1].mode!=="massage")).length;
 
   function tipFor(s, prev){
@@ -355,8 +360,8 @@ dialog::backdrop{background:rgba(10,15,22,.45)}
       const r = RECIPES[k], b = document.createElement("button");
       b.className = "len"; b.type="button"; b.id="len-"+k;
       const total = r.reduce((a,s)=>a+s.min,0);
-      b.innerHTML = `<span class="m">${k}<small>min</small></span><span class="sub"><span class="nw">${r.length} steps</span> <span class="nw">· ${letdowns(r)} letdowns</span></span><span class="seg">${r.map(s=>`<i style="flex:${s.min};background:${colorOf(s.mode)}"></i>`).join("")}</span>`;
-      b.setAttribute("aria-label", `${k} minute session, ${r.length} steps`);
+      b.innerHTML = `<span class="m">${k}<small>min</small></span><span class="sub">${NAMES[k]?`<span class="nw">${NAMES[k]}</span>`:`<span class="nw">${r.length} steps</span> <span class="nw">· ${letdowns(r)} letdowns</span>`}</span><span class="seg">${r.map(s=>`<i style="flex:${s.min};background:${colorOf(s.mode)}"></i>`).join("")}</span>`;
+      b.setAttribute("aria-label", `${k} minute ${NAMES[k]?NAMES[k].toLowerCase()+" ":""}session, ${r.length} steps`);
       b.onclick = () => openSession(k);
       $("lengths").appendChild(b);
     });
@@ -382,7 +387,7 @@ dialog::backdrop{background:rgba(10,15,22,.45)}
     el.classList.toggle("express", s.mode==="express");
     el.classList.toggle("hands", s.mode==="hands");
     el.classList.toggle("running", S.running);
-    $("sessTitle").textContent = `${S.key} minutes`;
+    $("sessTitle").textContent = NAMES[S.key] ? `${NAMES[S.key]} · ${S.key} min` : `${S.key} minutes`;
     $("lcdCycle").textContent = s.mode==="hands" ? "--" : s.cpm;
     $("lcdVac").textContent = s.mode==="hands" ? "OFF" : "L"+s.vac;
     $("clock").textContent = fmt(s.sec - S.stepElapsed);
@@ -455,6 +460,7 @@ dialog::backdrop{background:rgba(10,15,22,.45)}
     if(!soundOn||!actx) return;
     const t=actx.currentTime+0.02;
     if(kind==="massage"){ bell(1319,t); bell(1319,t+0.4); }          // letdown: two high dings
+    else if(kind==="hands"){ bell(659,t,2.2); }                      // rest: one low ding
     else if(kind==="done"){ bell(784,t); bell(988,t+0.3); bell(1319,t+0.6,2.2); }
     else { bell(988,t); bell(740,t+0.45,2); }                          // expression: high then low
   }
