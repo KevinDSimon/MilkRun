@@ -197,6 +197,7 @@ dialog::backdrop{background:rgba(10,15,22,.45)}
       <p class="sub" id="since" hidden></p>
     </div>
     <div class="lengths" id="lengths"></div>
+    <button type="button" id="manualBtn">Log without the timer</button>
     <div style="display:flex;flex-direction:column;gap:12px">
       <div class="loghead"><h2 class="sect">Log</h2><button class="link" id="exportBtn">Export CSV</button></div>
       <div class="stats">
@@ -244,12 +245,13 @@ dialog::backdrop{background:rgba(10,15,22,.45)}
   <section id="vLog" class="wrap" style="gap:18px" hidden>
     <header class="bar"><span class="wordmark"><svg width="22" height="14" viewBox="0 0 22 14" aria-hidden="true"><path d="M1 7q1.25-4 2.5 0t2.5 0 2.5 0" fill="none" stroke="var(--massage)" stroke-width="2" stroke-linecap="round"/><path d="M8.5 7q3.25-6 6.5 0t6 0" fill="none" stroke="var(--express)" stroke-width="2" stroke-linecap="round"/></svg>Milk Run</span><span class="acts"><button class="iconbtn" id="infoBtn3" aria-label="Spectra guide"><svg width="22" height="22" viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="8.5" fill="none" stroke="currentColor" stroke-width="1.5"/><circle cx="10" cy="6.2" r="1.1" fill="currentColor"/><path d="M10 9v5.5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg></button></span></header>
     <div class="head">
-      <div class="eyebrow">Session done</div>
+      <div class="eyebrow" id="logEyebrow">Session done</div>
       <h1>How much did you pump?</h1>
       <p class="sub" id="logSub"></p>
     </div>
-    <div class="callout">Before you power off, turn the vacuum down to L1 or L2. Your Spectra starts the next session on its last settings.</div>
+    <div class="callout" id="logCallout">Before you power off, turn the vacuum down to L1 or L2. Your Spectra starts the next session on its last settings.</div>
     <div class="card">
+      <label for="whenAt" id="whenRow" hidden>When<input id="whenAt" type="datetime-local"></label>
       <div class="row">
         <label for="ozL">Left (oz)
           <div class="stepper"><button type="button" data-step="ozL:-0.25" aria-label="Less left">−</button><input id="ozL" type="number" inputmode="decimal" step="0.25" min="0" value="0"><button type="button" data-step="ozL:0.25" aria-label="More left">+</button></div>
@@ -259,7 +261,7 @@ dialog::backdrop{background:rgba(10,15,22,.45)}
         </label>
       </div>
       <div class="row">
-        <label for="vacUsed">Highest vacuum used<select id="vacUsed"></select></label>
+        <label for="vacUsed">Highest vacuum used<select id="vacUsed"><option value="">Not sure</option></select></label>
         <label for="durUsed">Minutes<input id="durUsed" type="number" inputmode="numeric" min="0" step="1"></label>
       </div>
       <label for="note">Note<textarea id="note" rows="2" placeholder="Comfort, letdowns, anything to try next time"></textarea></label>
@@ -538,16 +540,30 @@ dialog::backdrop{background:rgba(10,15,22,.45)}
     $("ozL").value="0"; $("ozR").value="0"; $("note").value="";
     $("logSub").textContent = `${S.key} minute session · ${Math.max(1, Math.round(S.totalElapsed/60))} min pumped`;
     S.running=false; store.del("pump.run"); paintAwake();
-    show("vLog");
+    setManual(false); show("vLog");
   }
 
   // ---------- log ----------
   for(let v=1;v<=12;v++){ const o=document.createElement("option"); o.value=v; o.textContent="L"+v; $("vacUsed").appendChild(o); }
   document.querySelectorAll("[data-step]").forEach(b=>b.onclick=()=>{ const [id,d]=b.dataset.step.split(":"); const i=$(id); const v=Math.max(0,(parseFloat(i.value)||0)+parseFloat(d)); i.value=String(Math.round(v*100)/100); });
-  let sessions = store.get("pump.sessions", []);
+  let sessions = store.get("pump.sessions", []), manual = false;
+  const localInput = t => { const d=new Date(t); return new Date(d.getTime()-d.getTimezoneOffset()*60000).toISOString().slice(0,16); };
+  function setManual(on){
+    manual = on;
+    $("whenRow").hidden = !on; $("logCallout").hidden = on;
+    $("logEyebrow").textContent = on ? "Log a session" : "Session done";
+  }
+  $("manualBtn").onclick = () => {
+    S=null; setManual(true);
+    $("whenAt").value = localInput(Date.now()); $("whenAt").max = localInput(Date.now());
+    $("vacUsed").value=""; $("durUsed").value=""; $("ozL").value="0"; $("ozR").value="0"; $("note").value="";
+    $("logSub").textContent = "Pumped without the timer? Add it here.";
+    show("vLog");
+  };
   $("discardBtn").onclick = () => { S=null; renderLengths(); renderLog(); show("vStart"); };
   $("saveBtn").onclick = () => {
-    sessions = [{ id:"s"+Date.now(), startedAt:S&&S.startedAt||Date.now(), minutes:parseInt($("durUsed").value,10)||0,
+    const at = manual ? (new Date($("whenAt").value).getTime() || Date.now()) : (S&&S.startedAt||Date.now());
+    sessions = [{ id:"s"+Date.now(), startedAt:at, minutes:parseInt($("durUsed").value,10)||0,
       left:parseFloat($("ozL").value)||0, right:parseFloat($("ozR").value)||0, vacuum:parseInt($("vacUsed").value,10)||null,
       recipe:S?S.key+" min":"", note:$("note").value.trim().slice(0,500) }, ...sessions];
     store.set("pump.sessions", sessions);
